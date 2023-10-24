@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Login</title>
+    <!-- Google Fontsのスタイルシートを読み込み -->
+    <link href="https://fonts.googleapis.com/earlyaccess/nicomoji.css" rel="stylesheet">
+</head>
+<body>
+    <!-- ヘッダー -->
+    <header>
+        <div class="site-name">
+            <h1 style="font-size: 32px; cursor: pointer;" onclick="redirectToSellPage()">キャルション！</h1>
+            <script>
+                // サイト名クリック時のリダイレクト関数
+                function redirectToSellPage() {
+                    window.location.href = '/sell';
+                }
+            </script>
+        </div>
+    </header>
+
+    <!-- ユーザー認証エラーメッセージ -->
+    <div th:if="${param.error}">
+        <p>ユーザー認証に失敗しました</p>
+    </div>
+
+    <!-- ログアウトメッセージ -->
+    <div th:if="${param.logout}">
+        <p>ログアウトしました</p>
+    </div>
+
+    <!-- ログインフォーム -->
+    <form th:action="@{/sell/login}" method="post">
+        <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}" />
+        <div>
+            <label>ユーザー名</label>
+            <input type="text" name="username" required />
+        </div>
+        <div>
+            <label>パスワード</label>
+            <input type="password" name="password" required />
+        </div>
+        <button type="submit">ログイン</button>
+    </form>
+
+    <!-- 新規アカウント作成へのリンク -->
+    <p>
+        <a th:href="@{/sell/sub}">新規登録はこちら</a>
+    </p>
+</body>
+<style>
+/* ページ全体のスタイル */
+body {
+    font-family: Arial, sans-serif;
+    background-color: #f2f2f2;
+    margin: 0;
+    padding: 0;
+}
+
+/* コンテナのスタイル */
+.container {
+    max-width: 150px;
+    margin: 0 auto;
+    padding: 20px;
+    background-color: #ffffff;
+    border: 1px solid #ccc;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+}
+
+/* 見出しのスタイル */
+h2 {
+    text-align: center;
+    color: #333;
+}
+
+/* フォームのスタイル */
+form {
+    text-align: center;
+}
+
+/* ラベルのスタイル */
+label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+}
+
+/* テキスト入力フィールドのスタイル */
+input[type="text"],
+input[type="password"] {
+    width: 30%;
+    padding: 10px;
+    margin-bottom: 10px;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+}
+
+/* ログインボタンのスタイル */
+button[type="submit"] {
+    width: 20%;
+    padding: 10px;
+    background-color: #007bff;
+    border: none;
+    border-radius: 3px;
+    color: #fff;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+/* ログインボタンのホバースタイル */
+button[type="submit"]:hover {
+    background-color: #0056b3;
+}
+
+/* エラーメッセージのスタイル */
+div.alert {
+    margin-top: 10px;
+    padding: 10px;
+    background-color: #f44336;
+    color: #fff;
+    text-align: center;
+    border-radius: 3px;
+}
+
+/* 新規登録リンクのスタイル */
+p {
+    text-align: center;
+    margin-top: 10px;
+}
+
+/* リンクのスタイル */
+a {
+    color: #007bff;
+    text-decoration: none;
+}
+
+/* リンクのホバースタイル */
+a:hover {
+    text-decoration: underline;
+}
+
+/* サイト名のスタイル */
+h1 {
+    font-family: "Nico Moji";
+}
+
+.site-name {
+    background: #FFDA45; /*背景色の指定*/
+    color: #000000; /*テキストの色の指定*/
+    padding: 5px;
+    text-align: center;
+    width: 200px;
+}
+</style>
+</html>

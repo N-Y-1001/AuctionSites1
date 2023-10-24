@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh; /* This ensures full viewport height */
+    margin: 0;
+}
+canvas {
+	background: #001f3f;
+	display: block;
+	margin: 0 auto;
+}
+
+#gameOverMessage {
+	position: fixed;
+	top: 50%;
+	left: 50%;
+	transform: translate(-50%, -50%);
+	background: rgba(255, 255, 255, 0.8);
+	padding: 20px;
+	display: none;
+}
+
+/* ボタンを中央に配置するスタイル */
+#scoreForm {
+	text-align: center;
+	position: fixed;
+	top: 30%;
+	left: 50%;
+	transform: translate(-50%, -50%);
+}
+
+/* ボタンのスタイル */
+#scoreForm button {
+	padding: 10px 20px;
+	font-size: 16px;
+	background-color: #007bff; /* ボタンの背景色 */
+	color: #fff; /* ボタンのテキスト色 */
+	border: none;
+	cursor: pointer;
+}
+
+#gameTitle {
+    font-size: 24px;
+    text-align: center;
+    background: rgba(255, 255, 255, 0.8);
+    padding: 20px;
+    position: absolute; /* 絶対位置指定 */
+    top: 150px; /* 画像の上に50pxの位置に配置 */
+    left: 50%; /* 横方向中央に配置 */
+    transform: translateX(-50%); /* 中央揃え */
+    white-space: nowrap; /* タイトルの改行を無効にする */
+}
+
+#gameInstructions {
+    text-align: center;
+    background: rgba(255, 255, 255, 0.8);
+    padding: 20px;
+    position: absolute; /* 絶対位置指定 */
+    top: 350px; /* 画像の上に50pxの位置に配置 */
+    left: 50%; /* 横方向中央に配置 */
+    transform: translateX(-50%); /* 中央揃え */
+    white-space: nowrap; /* タイトルの改行を無効にする */
+}
+
+</style>
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+</head>
+
+<body>
+
+	<audio id="bgmAudio" loop>
+    <source src="/bgm.mp3" type="audio/mpeg">
+	</audio>
+	<audio id="jumpSound">
+    <source src="/jump.mp3" type="audio/mpeg">
+	</audio>
+	<audio id="gameOverSound">
+    <source src="/gameOver.mp3" type="audio/mpeg">
+	</audio>
+	
+
+	<div id="gameOverMessage" style="display: none;">
+		<p>
+			ゲームオーバー ☆ スコア送信ボタンをクリックしてね！<span id="scoreDisplay"></span>
+		</p>
+	</div>
+    <div id="gameTitle">
+        <h1>~CalRun~ビルゲイツには負けない</h1>
+    </div>
+    <div id="gameInstructions">
+        <p>操作説明: ジャンプ - スペースキー, 左移動 - ←キー, 右移動 - →キー, しゃがむ - ↓キー</p>
+    </div>
+
+    <canvas id="gameCanvas" width="1200" height="500"></canvas>
+    <button id="startGame" style="display: block; margin: 20px auto;">ここをクリックでゲームスタート</button>
+    <button id="restartGame" style="display: none; margin: 20px auto;">もう一度プレイ</button>
+    <button id="戻る" style="display: block; margin: 20px auto;">
+        <a th:href="@{/afterLogin/sell}">topに戻る</a>
+    </button>
+
+    <form id="scoreForm" th:action="@{/afterLogin/submitScore}"
+        th:object="${myRequestData}" method="post" style="display: none;">
+        <input type="number" id="scoreField" th:field="*{score}"
+            placeholder="スコアを入力してください" th:readonly="true">
+        <button type="submit">送信でポイント獲得</button>
+    </form>
+
+    <script>
+        // キャンバスの描画コンテキストを取得
+        const canvas = document.getElementById('gameCanvas');
+        const context = canvas.getContext('2d');
+
+        // プレイヤーの初期設定
+        let playerX = 50;
+        let playerY = canvas.height - 250;
+        let playerWidth = 171;
+        let playerHeight = 182;
+        let playerSpeed = 2;
+        let gravity = 0.5;
+        let velocityY = 0;
+        let isJumping = false;
+        let isDucking = false; // しゃがんでいるかどうかを追跡する変数を追加
+        let obstacles = [];
+        let keys = {};
+        let isGameOver = false;
+        let isGameRunning = false;
+        let animationInterval;
+        let isDownKeyPressed = false;
+
+        // 丘の設定
+        let angle = 0;
+        const HILL_AMPLITUDE = 50;
+        const HILL_SPEED = 0.02;
+
+        // 背景の設定
+        let backgroundX1 = 0;
+        let backgroundX2 = canvas.width;
+        let background = new Image();
+        background.src = "/forest.png";
+
+        // プレイヤー画像のパス
+        const playerImagePaths = [
+            "/001.png",
+            "/002.png",
+            "/003.png",
+            "/004.png",
+            "/005.png",
+            "/006.png",
+            "/007.png",
+            "/008.png",
+            "/009.png",
+            "/010.png",
+            "/011.png",
+            "/012.png"
+        ];
+
+        // ジャンプ時の画像パス
+        const jumpImagePath = "/jump.png";
+
+        const jumpImage = new Image();
+        jumpImage.src = jumpImagePath;
+
+        // しゃがんでいる画像のパス
+        const duckingImagePaths = "/syagami.png";
+        const duckingImage = new Image();
+        duckingImage.src = duckingImagePaths;
+                   
+
+        
+        // 画像のアニメーション関連
+        const numFrames = playerImagePaths.length;
+        let currentFrame = 0;
+        const playerImages = [];
+
+        // プレイヤー画像を読み込む
+        playerImagePaths.forEach((path) => {
+            const image = new Image();
+            image.src = path;
+            playerImages.push(image);
+        });
+
+        // 障害物画像の読み込み
+        const obstacleImage = new Image();
+        obstacleImage.src = "/enemy.png";
+
+        // 背景画像の読み込み完了時の処理
+        background.onload = function () {
+            // 背景を描画
+            drawBackground();
+
+            // ゲーム開始ボタンのクリックイベントハンドラ
+            document.getElementById('startGame').addEventListener('click', function () {
+                if (!isGameRunning && !isGameOver) { // ゲームが実行中でなく、ゲームオーバー状態でない場合にのみ実行
+                    startGame();
+                    // ボタンを非表示にする
+                    document.getElementById('startGame').style.display = 'none';
+                }
+            });
+
+            // ゲームリスタートボタンのクリックイベントハンドラ
+            document.getElementById('restartGame').addEventListener('click', function () {
+                if (isGameOver) {
+                    resetGame();
+                }
+            });
+        };
+        
+         document.getElementById('startGame').addEventListener('click', function () {
+            if (!isGameRunning && !isGameOver) {
+                startGame();
+                // Hide the title when the game starts
+                document.getElementById('gameTitle').style.display = 'none';
+                // Hide the start button
+                document.getElementById('startGame').style.display = 'none';
+                 // Hide the start button
+                document.getElementById('gameInstructions').style.display = 'none';
+            }
+        });
+
+        // ゲームの経過時間
+        let gameTime = 0;
+
+        // ゲーム開始関数
+        function startGame() {
+            gameTime = 0;
+            isGameOver = false;
+            isGameRunning = true; // ゲームが開始されたことを設定
+            
+         	// BGMを再生
+            var bgmAudio = document.getElementById('bgmAudio');
+            bgmAudio.play();
+
+            // アニメーション速度を設定 (0.5秒ごとにフレームを切り替える)
+            const animationSpeed = 500; // ミリ秒
+            clearInterval(animationInterval);
+            animationInterval = setInterval(drawPlayer, animationSpeed);
+
+            // ゲームループを開始
+            gameLoop();
+        }
+
+        // ゲームリセット関数
+        function resetGame() {
+            obstacles = [];
+            playerX = 50;
+            playerY = canvas.height - 250;
+            isJumping = false;
+            velocityY = 0;
+            gameTime = 0;
+
+            // ゲームオーバーメッセージを非表示にする
+            document.getElementById('gameOverMessage').style.display = 'none';
+
+            // アニメーション速度を設定 (0.5秒ごとにフレームを切り替える)
+            const animationSpeed = 500; // ミリ秒
+            clearInterval(animationInterval);
+            animationInterval = setInterval(drawPlayer, animationSpeed);
+
+            // ゲーム再開
+            isGameRunning = true;
+            gameLoop();
+        }
+
+        // 背景を描画する関数
+        function drawBackground() {
+            context.drawImage(background, backgroundX1, 0, canvas.width, canvas.height);
+            context.drawImage(background, backgroundX2, 0, canvas.width, canvas.height);
+
+            backgroundX1 -= 1;
+            backgroundX2 -= 1;
+
+            if (backgroundX1 <= -canvas.width) {
+                backgroundX1 = backgroundX2 + canvas.width;
+            }
+
+            if (backgroundX2 <= -canvas.width) {
+                backgroundX2 = backgroundX1 + canvas.width;
+            }
+        }
+
+        // 丘の高さを計算する関数
+        function getHillY(x) {
+            return HILL_AMPLITUDE * Math.sin((x + angle) * HILL_SPEED);
+        }
+
+     // キーボードイベントリスナーを追加
+        document.addEventListener('keydown', (e) => { 
+            keys[e.code] = true;
+            if (e.code === 'ArrowDown') {
+                isDucking = true; // ↓キーが押されたらしゃがんでいる状態にする
+            }
+        });
+        document.addEventListener('keyup', (e) => { 
+            keys[e.code] = false; 
+            if (e.code === 'ArrowDown') {
+                isDucking = false; // ↓キーが離されたらしゃがんでいない状態にする
+            }
+        });
+        
+     // キーボードイベントリスナーを追加
+        document.addEventListener('keydown', (e) => {
+            keys[e.code] = true;
+
+            // 上矢印キーが押された場合
+            if (e.code === 'ArrowUp') {
+                // 攻撃を発射する処理をここに追加
+                // 例：attack();
+            }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            keys[e.code] = false;
+        });
+
+        // ゲームのアップデートロジック
+        function update() {
+            if (isGameRunning && !isGameOver) {
+                gameTime = gameTime + 1;
+            }
+
+            if (isGameRunning) {
+                // 左右キーによるプレイヤーの移動
+                if (keys['ArrowLeft']) playerX -= playerSpeed;
+                if (keys['ArrowRight']) playerX += playerSpeed;
+
+                // 画面左端での制約
+                if (playerX < 0) {
+                    playerX = 0;
+                }
+                // 画面右端での制約
+                if (playerX + playerWidth > canvas.width) {
+                    playerX = canvas.width - playerWidth;
+                }
+
+                // ↓キーによるしゃがみ状態の切り替え
+                if (keys['ArrowDown']) {
+                    playerHeight = 91;
+                } else {
+                    playerHeight = 182;
+                }
+
+             	// スペースキーでジャンプ
+                if (keys['Space'] && !isJumping) {
+                    velocityY = -18; // 上方向への速度を設定してジャンプ
+                    isJumping = true;
+                    // ジャンプ効果音を再生
+                    playJumpSound();
+                }
+
+
+                // 重力による落下
+                velocityY += gravity;
+                playerY += velocityY;
+
+                // 地面に着地したらジャンプ状態を解除
+                if (playerY >= canvas.height - playerHeight) {
+                    playerY = canvas.height - playerHeight;
+                    isJumping = false;
+                }
+
+                // 一定の確率で障害物を生成
+                if (Math.random() < 0.007) {
+                    let isHighObstacle = Math.random() < 0.5;
+                    let onHill = Math.random() < 0.5;
+                    let obstacleSize;
+                    let obstacleX = canvas.width;
+                    let obstacleY;
+
+                    if (isHighObstacle) {
+                        obstacleSize = 25;
+                    } else {
+                        obstacleSize = 20;
+                    }
+
+                    // プレイヤーと同じ高さで障害物を登場させる
+                    obstacleY = playerY+175;
+
+                    obstacles.push({
+                        x: obstacleX,
+                        y: obstacleY,
+                        size: obstacleSize,
+                        onHill: onHill
+                    });
+                }
+
+                // 障害物の更新
+                obstacles.forEach((obstacle, i) => {
+                    obstacle.x -= playerSpeed;
+
+                    // 丘の上に障害物を配置
+                    if (obstacle.onHill) {
+                        obstacle.y = canvas.height - obstacle.size - getHillY(obstacle.x);
+                    }
+
+                    // 画面外に出たら障害物を削除
+                    if (obstacle.x < -obstacle.size) {
+                        obstacles.splice(i, 1);
+                    }
+
+                 // プレイヤーの当たり判定エリア
+                    const playerCollisionX = playerX ; // プレイヤーの左端から20ピクセル右にずらす
+                    const playerCollisionY = playerY ; // プレイヤーの上端から20ピクセル下にずらす
+                    const playerCollisionWidth = playerWidth - 40; // プレイヤーの幅から40ピクセル引く
+                    const playerCollisionHeight = playerHeight - 40; // プレイヤーの高さから40ピクセル引く
+
+                    // 障害物の当たり判定エリア
+                    const obstacleCollisionX = obstacle.x ; // 障害物の左端から10ピクセル右にずらす
+                    const obstacleCollisionY = obstacle.y -90; // 障害物の上端から10ピクセル下にずらす
+                    const obstacleCollisionWidth = obstacle.size * 4 - 20; // 障害物の幅から20ピクセル引く
+                    const obstacleCollisionHeight = obstacle.size * 4 - 20; // 障害物の高さから20ピクセル引く
+
+                    // プレイヤーと障害物の衝突判定
+                    if (
+                        playerCollisionX < obstacleCollisionX + obstacleCollisionWidth &&
+                        playerCollisionX + playerCollisionWidth > obstacleCollisionX &&
+                        playerCollisionY < obstacleCollisionY + obstacleCollisionHeight &&
+                        playerCollisionY + playerCollisionHeight > obstacleCollisionY
+                    ) {
+                        // 衝突した場合の処理
+                        isGameOver = true;
+                        isGameRunning = false;
+                        
+                        playgameOverSound();
+
+                        // スコアをフォームに設定
+                        document.getElementById('scoreField').value = gameTime;
+
+                        // スコアフォームを表示
+                        document.getElementById('scoreForm').style.display = 'block';
+
+                        // ゲームオーバーメッセージを表示
+                        document.getElementById('scoreDisplay').textContent = gameTime + 'pt';
+                        document.getElementById('gameOverMessage').style.display = 'block';
+
+                        // アニメーションを停止
+                        clearInterval(animationInterval);
+                        
+                        var bgmAudio = document.getElementById('bgmAudio');
+                        bgmAudio.pause();
+                    }
+
+                });
+            }
+        }
+        
+	    // ジャンプ効果音を再生する関数
+        function playJumpSound() {
+            var jumpSound = document.getElementById('jumpSound');
+            jumpSound.play();
+        }
+     	// ジャンプ効果音を再生する関数
+        function playgameOverSound() {
+            var gameOverSound = document.getElementById('gameOverSound');
+            gameOverSound.play();
+        }
+
+
+        // ゲームの描画
+        function draw() {
+            context.clearRect(0, 0, canvas.width, canvas.height);
+
+            // 背景を描画
+            drawBackground();
+
+            // スコアを表示
+            context.fillStyle = 'black';
+            context.font = '24px Arial';
+            context.fillText('スコア: ' + gameTime + 'pt', 20, 30);
+
+            // プレイヤーを描画
+            drawPlayer();
+
+            // 障害物を描画
+            drawObstacles();
+        }
+
+     // プレイヤーの描画
+        function drawPlayer() {
+        	if (isJumping && isDucking) {
+                // Display the ducking image when jumping and down key is pressed
+                context.drawImage(duckingImage, playerX, playerY, playerWidth, playerHeight);
+            } else if (isJumping) {
+                // ジャンプ中の画像を表示
+                context.drawImage(jumpImage, playerX, playerY, playerWidth, playerHeight);
+            } else if (isDucking) {
+                // しゃがんでいるときの画像を表示
+                context.drawImage(duckingImage, playerX, playerY, playerWidth, playerHeight);
+            } else {
+                // 通常の画像を表示
+                context.drawImage(playerImages[currentFrame], playerX, playerY, playerWidth, playerHeight);
+                currentFrame = (currentFrame + 1) % numFrames;
+            }
+        }
+
+
+        // 障害物の描画
+        function drawObstacles() {
+            obstacles.forEach((obstacle, i) => {
+                const obstacleWidth = obstacle.size * 4;
+                const obstacleHeight = obstacle.size * 4;
+                const obstacleX = obstacle.x;
+                const obstacleY = obstacle.y - obstacleHeight;
+
+                context.drawImage(obstacleImage, obstacleX, obstacleY, obstacleWidth, obstacleHeight);
+            });
+        }
+
+        // ゲームループ
+       function gameLoop() {
+    update();
+
+    // 障害物の位置を更新
+    obstacles.forEach((obstacle, i) => {
+        obstacle.x -= playerSpeed;
+
+        // 丘の上に障害物を配置
+        if (obstacle.onHill) {
+            obstacle.y = canvas.height - obstacle.size - getHillY(obstacle.x);
+        }
+
+        // 画面外に出たら障害物を削除
+        if (obstacle.x < -obstacle.size) {
+            obstacles.splice(i, 1);
+        }
+    });
+
+    if (!isGameOver) {
+        drawBackground();
+    }
+    draw();
+    requestAnimationFrame(gameLoop);
+}
+
+    </script>
+</body>
+</html>
