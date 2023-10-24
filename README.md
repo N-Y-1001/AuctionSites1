@@ -1,7 +1,7 @@
 # AuctionSites1
 訓練学校卒業作品としてグループで作成した作品です
 
---商品マスタ
+#--商品マスタ
 CREATE TABLE goods (
     goods_id SERIAL PRIMARY KEY,
     name VARCHAR(255),
